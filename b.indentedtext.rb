@@ -39,8 +39,8 @@ class B::IndentedText
   end
   protected :take_lines!
 
-  def root?
-    @string.nil? # In principle.
+  def [] s
+    @children.find{ s === _1.string }
   end
 
   def inspect indent:2
