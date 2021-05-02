@@ -70,7 +70,6 @@ class BlobApartment
 
   def initialize client:, collection:
     @client = client
-    @possession = @client[collection + '.possessions']
     @bucket = Mongo::Grid::FSBucket.new @client, fs_name:collection
   end
 
@@ -87,7 +86,7 @@ class BlobApartment
     sha256str  = BlobApartment.sha256 blob
     sha256bson = BlobApartment.string_to_bson sha256str
     mimetype   = BlobApartment.mimetype blob
-    if register sha256bson
+    unless has_sha256bson? sha256bson
       @bucket.upload_from_stream(
         sha256str,
         blob,
@@ -160,21 +159,27 @@ class BlobApartment
     end
   end
 
-  def digest? digest
-    @possession.find({_id:digest}, {limit:1}).count == 1
-  end
-
-  def data? data
-    digest? BlobApartment.sha256_in_bson data
-  end
-
-  def has_file? path
-    buffer     = open(path, 'rb').read
+  def has_buffer? buffer
     length     = buffer.length
     sha256bson = BlobApartment.sha256_in_bson buffer
     mimetype   = BlobApartment.mimetype buffer
     d = sole_completion sha256bson
     (d and d[:length]==length and d[:mimetype]==mimetype)
+  end
+
+  def has_file? path
+    has_buffer? open(path, 'rb').read
+  end
+
+  def has_sha256bson? bson
+    @bucket.find({'metadata.sha256':bson}, {limit:1}).first != nil
+  end
+
+  def has_digest? digest
+    if digest.is_a? String
+      digest = BlobApartment.string_to_bson digest
+    end
+    has_sha256bson? digest
   end
 
   #
@@ -204,22 +209,6 @@ class BlobApartment
       count += 1
     end
     count
-  end
-
-  private
-
-  # true  ... First insert
-  # false ... Already have the digest (No insertion)
-  def register digest
-    before = @possession.find_one_and_update(
-      { _id: digest },
-      { }, # update nothing
-      {
-        upsert: true,
-        return_document: :before,
-      }
-    )
-    return before.nil?
   end
 end
 
