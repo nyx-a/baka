@@ -141,6 +141,7 @@ class B::Option
 
   # underlay!() will ignore any unknown keys.
   def underlay! other
+    return unless other.is_a? Hash
     for k,v in dn_flatten(other).slice(*@property.map(&:long))
       p = plong k
       unless @buffer.key? p
@@ -156,7 +157,8 @@ class B::Option
     bd = @buffer.fetch p, p.default
     return nil if bd.nil?
     begin
-      p.normalizer&.call(bd) || bd
+      nz = p.normalizer&.call(bd)
+      nz != nil ? nz : bd
     rescue Exception => e
       raise %Q`verification failed --#{p.long} "#{bd}" #{e.message}`
     end
@@ -169,6 +171,8 @@ class B::Option
     if find_l('toml').nil?
       register Property.new(
         long:        'toml',
+        default:     "~/.config/#{File.basename($0, '.*')}.toml",
+        normalizer: -> f { File.exist?(f) ? f : false },
         description: 'TOML file to underlay',
       )
     end
