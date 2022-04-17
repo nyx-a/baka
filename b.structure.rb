@@ -14,5 +14,14 @@ class B::Structure
       end
     end
   end
+
+  def to_hash
+    self.instance_variables.to_h do
+      [
+        _1[1..].to_sym,
+        instance_variable_get(_1),
+      ]
+    end
+  end
 end
 

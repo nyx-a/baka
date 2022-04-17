@@ -6,61 +6,41 @@ module B
 end
 
 class B::Log
+
+  SEVERITY = [
+    :debug,       # 0 ↑ low
+    :information, # 1
+    :warning,     # 2
+    :error,       # 3
+    :fatal,       # 4 ↓ high
+  ].freeze
+
   def initialize(
     file,
     age:       3,
     size:      1_000_000,
     format:    '%F %T.%1N',
-    separator: ' | ',
-    levels:    %w(debug information warning error fatal)
+    separator: ' | '
   )
     @logger    = Logger.new file, age, size
     @format    = format
     @separator = separator
     @padding   = ' ' * Time.now.strftime(@format).length
-    setlevels! levels
+    @active    = SEVERITY.to_h{ [_1, true] }
   end
 
-  def levels
-    @levels
+  def level
+    SEVERITY[ @active.select{ _2 }.keys.map{ SEVERITY.index _1 }.min ]
   end
 
-  def setlevels! *ary
-    if @levels
-      self.class.undef_method(*@levels.map(&:chr))
+  def level= severity
+    i = SEVERITY.index severity.to_sym
+    if i.nil?
+      raise "invalid severity #{severity} (#{SEVERITY.join(',')})"
+    else
+      SEVERITY[...i].each{ @active[_1] = false } # lower
+      SEVERITY[ i..].each{ @active[_1] = true  } # upper
     end
-    @levels = ary.flatten.map(&:to_s).map(&:downcase)
-    @levels.each &:freeze
-    @levels.freeze
-    @active = { }
-    for letter in @levels.map(&:chr).map(&:to_sym)
-      self.class.alias_method letter, :x
-      @active[letter] = true
-    end
-  end
-
-  def loglevel= lvl
-    lvl = lvl.to_s.downcase
-    idx = @levels.index lvl
-    if idx != nil
-      @levels[...idx].each{ @active[_1.chr.to_sym] = false }
-      @levels[ idx..].each{ @active[_1.chr.to_sym] = true  }
-      return lvl
-    end
-  end
-
-  # @active[:x] cannot be true
-  def x *object, method:'inspect'
-    if @active[__callee__]
-      @logger << make(
-        __callee__,
-        Time.now,
-        object.map{
-          String===_1 ? _1 : _1.public_send(method)
-        }.join(' ')
-      )
-    end
-    object.one? ? object.first : object
   end
 
   def blank
@@ -75,18 +55,26 @@ class B::Log
     @logger.close
   end
 
-  private
+  def add severity, *objects
+    if @active[severity.to_sym]
+      s = objects.map{ _1.is_a?(String) ? _1 : _1.inspect }.join ' '
+      @logger << make(letter:severity[0], message:s)
+    end
+    objects.one? ? objects.first : objects
+  end
 
-  def make letter, time, message
-    tm = time.strftime @format
-    h1 = [letter.upcase,   tm      ].join ' '
-    h2 = [letter.downcase, @padding].join ' '
-    [
-      h1,
-      @separator,
-      message.gsub("\n", "\n#{h2}#{@separator}"),
-      "\n"
-    ].join
+  def make letter:, message:, time:Time.now
+    h1 = [letter.upcase,   time.strftime(@format) ].join ' '
+    h2 = [letter.downcase, @padding               ].join ' '
+    m  = message.gsub("\n", "\n#{h2}#{@separator}")
+    [h1, @separator, m, "\n"].join
+  end
+
+  for severity in SEVERITY
+    define_method severity do |*objects|
+      add __method__, *objects
+    end
+    alias_method severity[0], severity
   end
 end
 
