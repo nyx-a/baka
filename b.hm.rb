@@ -11,18 +11,11 @@ class B::HM
   attr_reader :r
 
   def initialize *args
-    case args.size
-    when 2
-      @r = self.class.hm_to_r(*args)
-    when 1
-      @r = self.class.rationalize args.first
-    else
-      raise ArgumentError, "wrong number of arguments (given #{args.size})"
-    end
+    @r = self.class.a_to_r(*args)
   end
 
   def inspect
-    self.class.r_to_hm( @r ).join ':'
+    self.class.r_to_a( @r ).join ':'
   end
 
   def + other
@@ -43,18 +36,22 @@ class B::HM
 
   #- - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  def self.hm_to_r h, m
-    h + Rational(m, 60)
+  def self.a_to_r *array
+    array.reverse.inject do |s,b|
+      Rational(s, 60) + b
+    end
   end
 
-  # r : Rational を60進数に見立てて [商, 余] を返す
-  def self.r_to_hm r
-    truncate  = r.truncate
-    remainder = r - truncate
-    [
-      truncate,
-      (remainder.numerator * Rational(60, remainder.denominator)).to_f
-    ]
+  def self.r_to_a rational
+    array = [ ]
+    r = rational
+    until r.zero?
+      truncate  = r.truncate
+      remainder = r - truncate
+      array.push truncate
+      r = (remainder.numerator * Rational(60, remainder.denominator))
+    end
+    return array
   end
 
   def self.rationalize other
