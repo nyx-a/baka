@@ -11,11 +11,11 @@ class B::HM
   attr_reader :r
 
   def initialize *args
-    @r = self.class.a_to_r(*args)
+    @r = self.class.rationalize args.one? ? args.first : args
   end
 
   def inspect
-    self.class.r_to_a( @r ).join ':'
+    self.class.r_to_a(@r).join ':'
   end
 
   def + other
@@ -38,7 +38,7 @@ class B::HM
 
   def self.a_to_r *array
     array.reverse.inject do |s,b|
-      Rational(s, 60) + b
+      Rational(s, 60) + Rational(b)
     end
   end
 
@@ -49,18 +49,22 @@ class B::HM
       truncate  = r.truncate
       remainder = r - truncate
       array.push truncate
-      r = (remainder.numerator * Rational(60, remainder.denominator))
+      r = remainder.numerator * Rational(60, remainder.denominator)
     end
     return array
   end
 
   def self.rationalize other
-    if other.is_a? self
-      other.r
-    elsif other.respond_to? :rationalize
-      other.rationalize
+    case other
+    when self   then other.r
+    when Array  then a_to_r(*other)
+    when String then a_to_r(*other.split(':').map(&:to_f))
     else
-      raise ArgumentError, "cannot rationalize => `#{other.inspect}`"
+      if other.respond_to? :rationalize
+        other.rationalize
+      else
+        raise ArgumentError, "cannot rationalize => `#{other.inspect}`"
+      end
     end
   end
 end
